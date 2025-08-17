@@ -1,0 +1,195 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: #333333;
+  --card: #ffffff;
+  --card-foreground: #333333;
+  --popover: #ffffff;
+  --popover-foreground: #333333;
+  --primary: #aa0000;
+  --primary-foreground: #ffffff;
+  --secondary: #f6b60b;
+  --secondary-foreground: #333333;
+  --muted: #f8f9fa;
+  --muted-foreground: #6c757d;
+  --accent: #f6b60b;
+  --accent-foreground: #333333;
+  --destructive: #dc3545;
+  --destructive-foreground: #ffffff;
+  --border: rgba(51, 51, 51, 0.1);
+  --input: transparent;
+  --input-background: #f8f9fa;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #aa0000;
+  --chart-1: #aa0000;
+  --chart-2: #f6b60b;
+  --chart-3: #28a745;
+  --chart-4: #17a2b8;
+  --chart-5: #6f42c1;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #333333;
+  --sidebar-primary: #aa0000;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f8f9fa;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: rgba(51, 51, 51, 0.1);
+  --sidebar-ring: #aa0000;
+  
+  /* BPI Brand Colors */
+  --bpi-red: #aa0000;
+  --bpi-gold: #f6b60b;
+  --bpi-white: #ffffff;
+  --bpi-dark-gray: #333333;
+  --bpi-light-gray: #f8f9fa;
+  --bpi-success: #28a745;
+  --bpi-warning: #ffc107;
+  --bpi-danger: #dc3545;
+}
+
+.dark {
+  --background: #333333;
+  --foreground: #ffffff;
+  --card: #333333;
+  --card-foreground: #ffffff;
+  --popover: #333333;
+  --popover-foreground: #ffffff;
+  --primary: #aa0000;
+  --primary-foreground: #ffffff;
+  --secondary: #f6b60b;
+  --secondary-foreground: #333333;
+  --muted: #4a4a4a;
+  --muted-foreground: #a0a0a0;
+  --accent: #f6b60b;
+  --accent-foreground: #333333;
+  --destructive: #dc3545;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #aa0000;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* BPI Brand Colors */
+  --color-bpi-red: var(--bpi-red);
+  --color-bpi-gold: var(--bpi-gold);
+  --color-bpi-white: var(--bpi-white);
+  --color-bpi-dark-gray: var(--bpi-dark-gray);
+  --color-bpi-light-gray: var(--bpi-light-gray);
+  --color-bpi-success: var(--bpi-success);
+  --color-bpi-warning: var(--bpi-warning);
+  --color-bpi-danger: var(--bpi-danger);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: 1.75rem;
+      font-weight: var(--font-weight-medium);
+      line-height: 1.4;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: var(--font-weight-medium);
+      line-height: 1.4;
+    }
+
+    h3 {
+      font-size: 1.25rem;
+      font-weight: var(--font-weight-medium);
+      line-height: 1.4;
+    }
+
+    h4 {
+      font-size: 1rem;
+      font-weight: var(--font-weight-medium);
+      line-height: 1.4;
+    }
+
+    p {
+      font-size: 1rem;
+      font-weight: var(--font-weight-normal);
+      line-height: 1.6;
+    }
+
+    label {
+      font-size: 0.875rem;
+      font-weight: var(--font-weight-medium);
+      line-height: 1.4;
+    }
+
+    button {
+      font-size: 1rem;
+      font-weight: var(--font-weight-medium);
+      line-height: 1.4;
+    }
+
+    input {
+      font-size: 1rem;
+      font-weight: var(--font-weight-normal);
+      line-height: 1.4;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
