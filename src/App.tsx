@@ -23,7 +23,8 @@ import { NotificationsScreen } from './components/NotificationsScreen';
 import { Button } from './components/ui/button';
 import { Home, Target, Users, BookOpen, Settings } from 'lucide-react';
 
-type Screen = 
+// CHANGE 1: Added 'export' so other files could potentially use this type.
+export type Screen = 
   | 'home' 
   | 'strength' 
   | 'manager' 
@@ -63,10 +64,11 @@ export default function App() {
     previousScreen: null
   });
 
-  const navigateToScreen = (screen: Screen, data?: any) => {
+  // CHANGE 2: Modified this function to fix the TypeScript error.
+  const navigateToScreen = (screen: string, data?: any) => { // Changed 'Screen' to 'string' here
     setAppState(prev => ({
       ...prev,
-      currentScreen: screen,
+      currentScreen: screen as Screen, // Added 'as Screen' to assure TypeScript the type is correct
       previousScreen: prev.currentScreen,
       selectedCourse: data?.courseTitle || prev.selectedCourse,
       selectedSkill: data?.skillName || prev.selectedSkill,
