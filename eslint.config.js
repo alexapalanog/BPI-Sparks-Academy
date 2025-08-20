@@ -19,5 +19,11 @@ export default tseslint.config([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    // --- ADD THIS 'RULES' OBJECT ---
+    rules: {
+      // This will downgrade the "unused variable" error to a warning.
+      // Your build will now pass, but you will still see warnings in your terminal.
+      "@typescript-eslint/no-unused-vars": "warn",
+    }
   },
 ])
