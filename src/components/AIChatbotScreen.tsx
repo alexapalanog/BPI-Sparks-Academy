@@ -25,16 +25,18 @@ Your tone is professional, efficient, and helpful. You are an expert on BPI's in
 **CRITICAL INSTRUCTIONS:**
 1.  **Grounding is Paramount:** Base all answers exclusively on the [CONTEXT]. Do not use any external knowledge.
 2.  **Concise and Clear:** Keep responses short and to the point. Use bullet points or numbered lists for steps. AVOID long paragraphs.
-3.  **Handle Missing Information & Suggest Generic Fixes:** If the answer to the user's query is not in the [CONTEXT], you must first provide a safe, generic troubleshooting step that does not require specific BPI knowledge.
-    - For technical/IT issues (e.g., "laptop slow," "can't connect"), suggest a universal fix like "Have you tried restarting your computer?" or "Could you try clearing your browser cache?".
-    - For policy/process questions (e.g., "company car policy," "training budget"), suggest checking the official source like "I recommend looking for this on the main HR portal."
-    - Immediately after this generic suggestion, you MUST then offer to file a support ticket to get a definitive answer.
-4.  **JSON Output:** You MUST respond in a valid JSON format. Your response should be a single JSON object with two keys: "responseText" (a string) and "action" (a string).
-    - The "action" key should be "ANSWER" if you found the answer in the context.
-    - The "action" key should be "OFFER_TICKET" if you could not find the answer.
-    - Example for a successful answer: {"responseText": "Here are the steps to reset your password...", "action": "ANSWER"}
-    - Example for a missing answer: {"responseText": "I couldn't find a specific policy on that. It's often best to check the official HR portal first. If you still can't find it, I can file a ticket for you.", "action": "OFFER_TICKET"}
+3.  **Handle Missing Information & Pre-fill Ticket:** If the answer is not in the [CONTEXT], you must offer to file a support ticket. Crucially, you must analyze the user's query to intelligently pre-fill a support ticket for them.
+4.  **JSON Output:** You MUST respond in a valid JSON format.
+    - If you find the answer, the JSON should be: \`{"responseText": "...", "action": "ANSWER"}\`
+    - If you CANNOT find the answer, the JSON must be: \`{"responseText": "...", "action": "OFFER_TICKET", "ticketData": {"category": "...", "urgency": "...", "subject": "...", "description": "..."}}\`
+    - **ticketData Rules:**
+        - 'category': Infer from keywords (e.g., "software", "crashing" -> "IT Support > Software Issues").
+        - 'urgency': Infer from user's language (e.g., "can't work", "month-end" -> "High"; "annoying" -> "Medium"; "question about" -> "Low").
+        - 'subject': A concise summary of the user's problem.
+        - 'description': A more detailed summary of the user's query for the support team.
+    - **Example for a missing answer:** {"responseText": "I couldn't find a fix for that software issue. I can file a ticket for you with the details I've gathered.", "action": "OFFER_TICKET", "ticketData": {"category": "IT Support > Software Issues", "urgency": "High", "subject": "Accounting Software Crashing", "description": "User reported that the 'AccuBalance v4.5' software freezes and closes when running a quarterly report. They have already restarted their PC."}}
 `;
+
 
 const knowledgeBase = [
   // --- Existing Entries ---
@@ -53,7 +55,13 @@ const knowledgeBase = [
   { id: 'OPS-001', title: 'Procedure During Core Banking System Downtime', keywords: ['system down', 'offline', 'outage', 'core banking', 'finacle', 't24'], content: 'In the event of an unscheduled Core Banking System outage:\n1. Immediately check the official IT Status Page on the intranet for updates and estimated resolution time.\n2. Inform your immediate supervisor of the impact on your tasks.\n3. **DO NOT** attempt manual workarounds or use personal devices unless explicitly authorized by IT.\n4. Reassure clients that we are aware of the issue and working on a solution.' },
   { id: 'PROD-002', title: 'Finding Official Foreign Exchange (FX) Rates', keywords: ['fx', 'foreign exchange', 'dollar rate', 'currency', 'exchange rate'], content: 'To ensure accuracy for client transactions, you must always use the official BPI rates. The official, daily FX rates are published every morning on the **"Treasury"** page of the company intranet. Do not use rates from external websites for official business.' },
   { id: 'CUST-001', title: 'Handling Client Complaints', keywords: ['complaint', 'angry customer', 'unhappy client', 'escalate issue', 'customer feedback'], content: 'When handling a client complaint, follow the L.E.A.P. method:\n1. **Listen:** Allow the client to explain their issue without interruption.\n2. **Empathize:** Acknowledge their frustration and validate their feelings.\n3. **Action:** Document the issue in the CRM and identify the resolution steps.\n4. **Prevent:** If resolved, identify how to prevent it in the future. If you cannot resolve it, escalate the case via the "Tier 2 Support" process in the CRM.' },
-  { id: 'SEC-002', title: 'Data Privacy Policy for Client Information', keywords: ['data privacy', 'dpa', 'client information', 'confidential', 'pii'], content: 'Under the Data Privacy Act (DPA), all client Personally Identifiable Information (PII) is strictly confidential. You must not:\n- Share client details via unencrypted email or personal messaging apps.\n- Leave documents with client information unattended.\n- Access client records without a legitimate business reason.\n\nAll data privacy incidents must be reported to the Data Protection Officer (DPO) immediately.' }
+  { id: 'SEC-002', title: 'Data Privacy Policy for Client Information', keywords: ['data privacy', 'dpa', 'client information', 'confidential', 'pii'], content: 'Under the Data Privacy Act (DPA), all client Personally Identifiable Information (PII) is strictly confidential. You must not:\n- Share client details via unencrypted email or personal messaging apps.\n- Leave documents with client information unattended.\n- Access client records without a legitimate business reason.\n\nAll data privacy incidents must be reported to the Data Protection Officer (DPO) immediately.' },
+  {
+    id: 'IT-006',
+    title: 'Generic Software Troubleshooting',
+    keywords: ['software', 'app', 'program', 'crashing', 'freezing', 'error'],
+    content: 'For general software issues, a good first step is to restart your computer. If the problem persists, please check if there are any pending updates for the application.'
+  }
 ];
 
 const retrieveContext = (query: string) => {
@@ -110,16 +118,24 @@ const promptHistory = [
   { id: 3, prompt: 'Find official FX rates', date: 'Last month', category: 'Product' },
 ];
 
+interface TicketData {
+  category: string;
+  urgency: string;
+  subject: string;
+  description: string;
+}
+
 // --- MAIN COMPONENT ---
 export function AIChatbotScreen({ onNavigate, onBack }: AIChatbotScreenProps) {
   const [activeTab, setActiveTab] = useState('chat');
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [inputMessage, setInputMessage] = useState('');
+  const [isAwaitingTicketConfirmation, setIsAwaitingTicketConfirmation] = useState(false); // NEW "memory" state
   const [isLoading, setIsLoading] = useState(false);
   const [showTicketOffer, setShowTicketOffer] = useState(false);
   const [isFilingTicket, setIsFilingTicket] = useState(false);
-  const [ticketQuery, setTicketQuery] = useState('');
-  const [ticketDetails, setTicketDetails] = useState('');
+  const [ticketData, setTicketData] = useState<TicketData | null>(null); // REPLACES ticketQuery and ticketDetails
+  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false); // NEW state for submission loading
   const [selectedHistorySession, setSelectedHistorySession] = useState<number | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -132,11 +148,25 @@ export function AIChatbotScreen({ onNavigate, onBack }: AIChatbotScreenProps) {
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const handleSendMessage = async () => {
+const handleSendMessage = async () => {
     if (inputMessage.trim() && !isLoading) {
-      const currentQuery = inputMessage;
-      addMessage('user', currentQuery);
+      const currentQuery = inputMessage.toLowerCase().trim();
+      addMessage('user', inputMessage);
       setInputMessage('');
+
+      // --- NEW LOGIC BLOCK TO CHECK "MEMORY" ---
+      if (isAwaitingTicketConfirmation) {
+        const affirmativeResponses = ['yes', 'yep', 'ok', 'sure', 'please do', 'go ahead', 'yeah'];
+        if (affirmativeResponses.includes(currentQuery)) {
+          setIsAwaitingTicketConfirmation(false);
+          setShowTicketOffer(false);
+          setIsFilingTicket(true);
+          return; // Skip the AI call
+        }
+        // If the response is not affirmative, reset the flag and proceed as a normal query
+        setIsAwaitingTicketConfirmation(false);
+      }
+      
       setIsLoading(true);
       setShowTicketOffer(false);
 
@@ -144,9 +174,10 @@ export function AIChatbotScreen({ onNavigate, onBack }: AIChatbotScreenProps) {
       const aiResult = await fetchAiResponse(currentQuery, context);
 
       addMessage('ai', aiResult.responseText, aiResult.action === 'OFFER_TICKET');
-      if (aiResult.action === 'OFFER_TICKET') {
+      if (aiResult.action === 'OFFER_TICKET' && aiResult.ticketData) {
+        setTicketData(aiResult.ticketData);
         setShowTicketOffer(true);
-        setTicketQuery(currentQuery);
+        setIsAwaitingTicketConfirmation(true); // Set the "memory" flag to true
       }
       setIsLoading(false);
     }
@@ -154,17 +185,28 @@ export function AIChatbotScreen({ onNavigate, onBack }: AIChatbotScreenProps) {
   
   const handleFileTicketRequest = () => {
     setShowTicketOffer(false);
+    setIsAwaitingTicketConfirmation(false); // Reset the "memory" flag here too
     setIsFilingTicket(true);
   };
   
-  const handleSubmitTicket = () => {
-    console.log("Submitting Ticket:", { query: ticketQuery, details: ticketDetails });
-    setIsFilingTicket(false);
-    addMessage('system', `✓ Support ticket created for "${ticketQuery}". You will receive an email confirmation shortly.`);
-    setTicketQuery('');
-    setTicketDetails('');
+    const handleTicketFieldChange = (field: keyof TicketData, value: string) => {
+    setTicketData(prev => prev ? { ...prev, [field]: value } : null);
   };
+  
+  
+  const handleSubmitTicket = () => {
+    setIsSubmittingTicket(true);
+    // Simulate API call delay
+    setTimeout(() => {
+      const ticketId = `BPI-${Math.floor(100000 + Math.random() * 900000)}`;
+      console.log("Submitting Ticket:", { ...ticketData, ticketId });
 
+      setIsFilingTicket(false);
+      setIsSubmittingTicket(false);
+      addMessage('system', `✓ Support ticket ${ticketId} created for "${ticketData?.subject}". You will receive an email confirmation shortly.`);
+      setTicketData(null);
+    }, 1500);
+  };
   const handleHistorySessionClick = (sessionId: number) => {
     setSelectedHistorySession(selectedHistorySession === sessionId ? null : sessionId);
   };
@@ -217,21 +259,48 @@ export function AIChatbotScreen({ onNavigate, onBack }: AIChatbotScreenProps) {
                         </div>
                     </div>
                   )}
-                  {isFilingTicket && (
+                  {isFilingTicket && ticketData && (
                     <Card className="border-blue-300 bg-blue-50">
                         <CardHeader><CardTitle className="text-base text-blue-800">File a Support Ticket</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Summary of your issue</label>
-                                <Input value={ticketQuery} readOnly className="mt-1 bg-white" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1">Category</label>
+                                    <select value={ticketData.category} onChange={(e) => handleTicketFieldChange('category', e.target.value)} className="w-full p-2 border rounded-md bg-white">
+                                        <option>IT Support {'>'} Software Issues</option>
+                                        <option>IT Support {'>'} Hardware Issues</option>
+                                        <option>HR {'>'} Payroll Inquiry</option>
+                                        <option>HR {'>'} Leave Inquiry</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 block mb-1">Urgency</label>
+                                    <select value={ticketData.urgency} onChange={(e) => handleTicketFieldChange('urgency', e.target.value)} className="w-full p-2 border rounded-md bg-white">
+                                        <option>Low</option>
+                                        <option>Medium</option>
+                                        <option>High</option>
+                                        <option>Critical</option>
+                                    </select>
+                                </div>
                             </div>
-                             <div>
-                                <label className="text-sm font-medium text-gray-700">Additional Details (Optional)</label>
-                                <Textarea placeholder="Add any extra information here..." value={ticketDetails} onChange={(e) => setTicketDetails(e.target.value)} className="mt-1 bg-white" />
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 block mb-1">Subject</label>
+                                <Input value={ticketData.subject} onChange={(e) => handleTicketFieldChange('subject', e.target.value)} className="bg-white" />
+                            </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 block mb-1">Description</label>
+                                <Textarea value={ticketData.description} onChange={(e) => handleTicketFieldChange('description', e.target.value)} className="bg-white min-h-[100px]" />
                             </div>
                             <div className="flex gap-2">
-                                <Button onClick={handleSubmitTicket} className="bg-blue-600 hover:bg-blue-700 text-white"><CheckCircle className="w-4 h-4 mr-2" />Submit Ticket</Button>
-                                <Button variant="ghost" onClick={() => setIsFilingTicket(false)}>Cancel</Button>
+                                <Button onClick={handleSubmitTicket} className="bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmittingTicket}>
+                                    {isSubmittingTicket ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <CheckCircle className="w-4 h-4 mr-2" />
+                                    )}
+                                    Submit Ticket
+                                </Button>
+                                <Button variant="ghost" onClick={() => setIsFilingTicket(false)} disabled={isSubmittingTicket}>Cancel</Button>
                             </div>
                         </CardContent>
                     </Card>

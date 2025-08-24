@@ -5,6 +5,7 @@ import { ArrowLeft, Star, TrendingUp, BookOpen, Target, MessageCircle, Users, Cl
 
 interface SkillDetailScreenProps {
   skillName: string;
+  skillLevel?: number; // <-- ADD THIS NEW PROP
   onNavigate: (screen: string, data?: any) => void;
   onBack: () => void;
 }
@@ -172,8 +173,65 @@ const skillDetails = {
   }
 };
 
-export function SkillDetailScreen({ skillName, onNavigate, onBack }: SkillDetailScreenProps) {
-  const skill = skillDetails[skillName as keyof typeof skillDetails] || skillDetails.Communication;
+// --- NEW HELPER FUNCTIONS (Add these here) ---
+const skillLevels = {
+  outstanding: { label: 'Strong', color: '#28a745' },
+  excellent: { label: 'Excellent', color: '#17a2b8' },
+  proficient: { label: 'Proficient', color: '#f6b60b' },
+  developing: { label: 'Developing', color: '#FFA726' },
+  beginner: { label: 'Needs Focus', color: '#ffc107' }
+};
+
+const getSkillLevel = (score: number) => {
+  if (score >= 90) return skillLevels.outstanding;
+  if (score >= 80) return skillLevels.excellent;
+  if (score >= 70) return skillLevels.proficient;
+  if (score >= 55) return skillLevels.developing;
+  return skillLevels.beginner;
+};
+
+// --- THE DYNAMIC DATA GENERATOR (Add this new function) ---
+const generateGenericSkillDetails = (name: string, level: number) => {
+  const skillInfo = getSkillLevel(level);
+  const isTechnical = ['Security', 'Cloud', 'Mobile', 'Database', 'DevOps', 'Code', 'Testing', 'Architecture'].some(keyword => name.includes(keyword));
+
+  return {
+    level,
+    status: skillInfo.label,
+    color: skillInfo.color,
+    icon: isTechnical ? Code : MessageCircle, // Default icons
+    type: isTechnical ? 'technical' : 'soft',
+    description: `Your current proficiency in ${name}, focusing on core principles and practical application.`,
+    strengths: [
+      `Foundation in ${name} principles`,
+      'Understanding of key concepts',
+      'Practical application in recent projects',
+    ],
+    improvements: [
+      `Advanced ${name} techniques`,
+      `Mastery of complex scenarios in ${name}`,
+      `Mentoring others on ${name} best practices`,
+    ],
+    recentActivity: [
+      { date: 'Last month', activity: `Completed introductory ${name} assessment`, score: 'Good', insights: 2 },
+      { date: 'Last week', activity: `Applied ${name} in a team project`, score: 'Proficient', insights: 1 },
+    ],
+    aiInsights: `AI analysis indicates a solid and developing foundation in ${name}. Continued practice in advanced scenarios will accelerate your path to mastery.`,
+    nextMilestone: `Advanced ${name} Certification`,
+    recommendedAssessments: [
+      `Intermediate ${name} Scenarios`,
+      `Advanced ${name} Case Study`,
+      `${name} Best Practices Review`,
+    ],
+  };
+};
+
+
+export function SkillDetailScreen({ skillName, skillLevel, onNavigate, onBack }: SkillDetailScreenProps) {
+  // --- UPDATED LOGIC TO CHOOSE DATA SOURCE ---
+  const skill = skillDetails[skillName as keyof typeof skillDetails] 
+                || generateGenericSkillDetails(skillName, skillLevel || 50); // Use 50 as a safe default if level is not passed
+
   const IconComponent = skill.icon;
 
   return (
@@ -389,21 +447,21 @@ export function SkillDetailScreen({ skillName, onNavigate, onBack }: SkillDetail
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+                        <div className="space-y-3">
               {skill.recommendedAssessments.map((assessment, index) => (
                 <Button
                   key={index}
                   variant="outline"
-                  className="w-full justify-start border-[#aa0000]/20 text-[#aa0000] hover:bg-[#aa0000]/5"
-                  onClick={() => onNavigate('assessment', { 
+                  className="w-full justify-start border-[#aa0000]/20 text-[#aa0000] hover:bg-[#aa0000]/5 h-auto py-3 text-left"
+                  onClick={() => onNavigate('assessment', {
                     skillName: assessment,
                     courseTitle: assessment
                   })}
                 >
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-4 h-4" />
-                    <span>{assessment}</span>
-                  </div>
+                  <Brain className="w-4 h-4 mr-3 flex-shrink-0 self-start mt-1" />
+                  <span className="flex-1 whitespace-normal">
+                    {assessment}
+                  </span>
                 </Button>
               ))}
             </div>

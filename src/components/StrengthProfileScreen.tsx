@@ -291,7 +291,7 @@ export function StrengthProfileScreen({ onNavigate }: StrengthProfileScreenProps
               <Button
                 key={index}
                 variant="ghost"
-                onClick={() => onNavigate('skill-detail', { skillName: skill.name })}
+                onClick={() => onNavigate('skill-detail', { skillName: skill.name, skillLevel: skill.level })} // <-- PASSES NAME AND LEVEL
                 className="w-full p-3 h-auto justify-start hover:bg-gray-50 border border-gray-100 rounded-lg transition-all duration-200 hover:shadow-sm"
               >
                 <div className="flex items-center gap-3 w-full min-w-0">

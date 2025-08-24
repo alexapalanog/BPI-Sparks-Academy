@@ -5,6 +5,8 @@ import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
 import { ArrowLeft, Brain, Mic, Video, MessageCircle, Lightbulb, Target, TrendingUp, Award, PlayCircle, Pause, Square, CheckCircle, Clock } from 'lucide-react';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Loader2 } from 'lucide-react'; // Import Loader2 for the loading state
 
 interface CourseAssessmentScreenProps {
   courseTitle: string;
@@ -28,6 +30,76 @@ interface AIInsight {
   content: string;
   confidence: number;
 }
+
+// --- START OF DYNAMIC QUESTION GENERATION ---
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+if (!apiKey) { console.error("Gemini API key not found."); }
+const genAI = new GoogleGenerativeAI(apiKey);
+
+const masterPromptForQuestions = `
+You are an expert curriculum designer for a corporate learning platform at a major bank (BPI).
+Your task is to generate a set of insightful, open-ended assessment questions for a specific skill.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Relevance is Key:** The questions MUST be directly relevant to the provided [SKILL NAME] and appropriate for the [USER ROLE].
+2.  **Vary Question Types:** Generate a mix of 'scenario' and 'text' type questions as requested. 'scenario' questions should present a realistic workplace problem. 'text' questions should ask for a description of a past experience or a conceptual explanation.
+3.  **Consistent Format:** You MUST respond with a valid JSON array of question objects. Do not include any other text or markdown.
+4.  **JSON Schema:** Each object in the array must follow this exact schema:
+    \`{ "id": number, "type": "scenario" | "text", "question": "string", "context": "string", "category": "string" }\`
+    - \`id\`: A unique number for each question (e.g., 1, 2, 3).
+    - \`type\`: Either "scenario" or "text".
+    - \`question\`: The question itself.
+    - \`context\`: A short, helpful hint for the user.
+    - \`category\`: A relevant sub-topic of the main skill.
+
+**EXAMPLE REQUEST:**
+[SKILL NAME]: Communication
+[USER ROLE]: Developer
+[NUMBER OF QUESTIONS]: 2
+[DIFFICULTY]: Intermediate
+
+**EXAMPLE RESPONSE (JSON ONLY):**
+[
+  {
+    "id": 1,
+    "type": "scenario",
+    "question": "You need to explain a complex technical bug to a non-technical project manager who is concerned about deadlines. How would you structure this conversation?",
+    "context": "Focus on clarity, managing expectations, and proposing a solution.",
+    "category": "Stakeholder Communication"
+  },
+  {
+    "id": 2,
+    "type": "text",
+    "question": "Describe a time you provided code review feedback that was initially met with resistance. How did you handle it?",
+    "context": "Detail your communication approach and the outcome.",
+    "category": "Constructive Feedback"
+  }
+]
+`;
+
+interface Question { /* ... */ } // Keep existing interfaces
+interface AIInsight { /* ... */ }
+
+async function generateAssessmentQuestions(skillName: string, userRole: string, numQuestions = 3): Promise<Question[]> {
+  if (!apiKey) {
+    console.error("Cannot generate questions, API key is missing.");
+    return [{ id: 1, type: 'text', question: 'Error: Could not generate questions. API key not configured.', category: 'Error', context: 'Please contact support.' }];
+  }
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const fullPrompt = `${masterPromptForQuestions}\n---\n[SKILL NAME]: ${skillName}\n[USER ROLE]: ${userRole}\n[NUMBER OF QUESTIONS]: ${numQuestions}\n[DIFFICULTY]: Intermediate`;
+
+    const result = await model.generateContent(fullPrompt);
+    const responseText = result.response.text();
+    const cleanJsonString = responseText.replace(/```json|```/g, '').trim();
+    return JSON.parse(cleanJsonString);
+  } catch (error) {
+    console.error("Gemini Question Generation Error:", error);
+    return [{ id: 1, type: 'text', question: `Error: Could not generate questions for "${skillName}". Please try again later.`, category: 'Error', context: 'There was an issue contacting the AI model.' }];
+  }
+}
+
+// --- END OF DYNAMIC QUESTION GENERATION ---
 
 const generateSkillQuestions = (skillName: string, userRole: string): Question[] => {
   const baseQuestions = {
@@ -181,6 +253,9 @@ const generateSkillQuestions = (skillName: string, userRole: string): Question[]
 };
 
 export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onComplete }: CourseAssessmentScreenProps) {
+  // --- STEP 1: DEFINE ALL HOOKS UNCONDITIONALLY AT THE TOP ---
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [isGenerating, setIsGenerating] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [isRecording, setIsRecording] = useState(false);
@@ -190,16 +265,26 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [questionElapsedTime, setQuestionElapsedTime] = useState(0);
 
-  // Mock user role - in real app this would come from user data
+  // --- STEP 2: DEFINE CONSTANTS AND DERIVED STATE ---
   const userRole = 'Developer';
   const skill = skillName || courseTitle.split(' ')[0] || 'Communication';
-  
-  const questions = generateSkillQuestions(skill, userRole);
+
   const currentQuestion = questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
+  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+
+  // --- STEP 3: CALL ALL useEffect HOOKS ---
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      setIsGenerating(true);
+      const generatedQuestions = await generateAssessmentQuestions(skill, userRole, 3);
+      setQuestions(generatedQuestions);
+      setIsGenerating(false);
+    };
+    fetchQuestions();
+  }, [skill, userRole]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: number;
     if (isRecording) {
       interval = setInterval(() => {
         setRecordingTime(prev => prev + 1);
@@ -208,17 +293,21 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  // Question timer - tracks elapsed time per question
   useEffect(() => {
-    setQuestionStartTime(Date.now());
-    setQuestionElapsedTime(0);
-    
-    const timer = setInterval(() => {
-      setQuestionElapsedTime(Math.floor((Date.now() - questionStartTime) / 1000));
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [currentQuestionIndex]);
+    // Only run the timer logic if questions are ready
+    if (!isGenerating && questions.length > 0) {
+      setQuestionStartTime(Date.now());
+      setQuestionElapsedTime(0);
+      
+      const timer = setInterval(() => {
+        setQuestionElapsedTime(Math.floor((Date.now() - questionStartTime) / 1000));
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    }
+  }, [currentQuestionIndex, isGenerating, questions.length]);
+
+  // --- (Handler functions now come after all Hooks) ---
 
   const generateRealTimeInsight = (questionId: number, answer: string): AIInsight => {
     const insights = {
@@ -274,13 +363,15 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
   };
 
   const handleAnswerSubmit = () => {
+    // Note: A safety check for currentQuestion is good practice here
+    if (!currentQuestion) return;
+    
     const answer = answers[currentQuestion.id] || '';
     
     if (answer.trim()) {
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
       } else {
-        // Assessment complete - generate final insights
         setFinalInsights(generateFinalInsights());
         setIsComplete(true);
       }
@@ -288,12 +379,13 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
   };
 
   const handleVideoRecord = () => {
+    if (!currentQuestion) return;
+
     if (!isRecording) {
       setIsRecording(true);
       setRecordingTime(0);
     } else {
       setIsRecording(false);
-      // Simulate video recorded
       setAnswers(prev => ({
         ...prev,
         [currentQuestion.id]: `Video response recorded (${recordingTime}s)`
@@ -306,6 +398,19 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // --- The conditional return for the loading state now comes after all Hooks ---
+  if (isGenerating) {
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-white to-gray-50 flex flex-col items-center justify-center text-center p-8">
+            <div className="w-16 h-16 bg-[#aa0000]/10 rounded-full flex items-center justify-center mb-4">
+                <Loader2 className="w-8 h-8 text-[#aa0000] animate-spin" />
+            </div>
+            <h2 className="text-xl font-medium text-gray-800 mb-2">Building Your Assessment...</h2>
+            <p className="text-gray-600">Our AI is crafting personalized questions just for you based on the skill of **"{skill}"**. Please wait a moment.</p>
+        </div>
+    );
+  }
 
   if (isComplete) {
     return (
@@ -444,6 +549,17 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
     );
   }
 
+  // Inside the final return statement of CourseAssessmentScreen
+
+  if (!currentQuestion) {
+      // Handles the case where questions might be empty or index is out of bounds
+      return (
+          <div className="min-h-screen bg-gradient-to-br from-white to-gray-50 flex items-center justify-center p-8 text-center">
+              <p className="text-red-600">Could not load assessment question. Please try again.</p>
+          </div>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-gray-50">
       {/* Header */}
@@ -463,7 +579,8 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
           </div>
           <div className="text-right">
             <p className="text-white/80 text-xs">Question</p>
-            <p className="font-medium">{currentQuestionIndex + 1}/{questions.length}</p>
+            {/* ADDED CHECK HERE */}
+            <p className="font-medium">{questions.length > 0 ? `${currentQuestionIndex + 1}/${questions.length}` : '...'}</p>
           </div>
         </div>
         
@@ -476,8 +593,6 @@ export function CourseAssessmentScreen({ courseTitle, skillName, onNavigate, onC
           <Progress value={progress} className="h-2" />
         </div>
       </div>
-
-
 
       <div className="px-6 py-6 space-y-6">
         {/* Question Card */}
