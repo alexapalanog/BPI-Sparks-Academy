@@ -25,16 +25,17 @@ Your tone is professional, efficient, and helpful. You are an expert on BPI's in
 **CRITICAL INSTRUCTIONS:**
 1.  **Grounding is Paramount:** Base all answers exclusively on the [CONTEXT]. Do not use any external knowledge.
 2.  **Concise and Clear:** Keep responses short and to the point. Use bullet points or numbered lists for steps. AVOID long paragraphs.
-3.  **Handle Missing Information & Pre-fill Ticket:** If the answer is not in the [CONTEXT], you must offer to file a support ticket. Crucially, you must analyze the user's query to intelligently pre-fill a support ticket for them.
-4.  **JSON Output:** You MUST respond in a valid JSON format.
-    - If you find the answer, the JSON should be: \`{"responseText": "...", "action": "ANSWER"}\`
-    - If you CANNOT find the answer, the JSON must be: \`{"responseText": "...", "action": "OFFER_TICKET", "ticketData": {"category": "...", "urgency": "...", "subject": "...", "description": "..."}}\`
+3.  **Vague Query Handling (IMPORTANT):** If the user's query is too vague or general (e.g., "I have a problem", "it's not working", "help"), your first response MUST be to ask for more specific details. DO NOT offer a ticket yet. Your action in this case should be "ANSWER".
+4.  **Handle Missing Information & Pre-fill Ticket:** ONLY after the user has provided specific details, if you still cannot find the answer in the [CONTEXT], then you must offer to file a support ticket.
+5.  **Use Conversation History:** You will be given the [CHAT HISTORY]. Use it to understand the context of the user's latest [USER QUERY].
+6.  **JSON Output:** You MUST respond in a valid JSON format.
+    - If you are providing an answer OR asking for clarification, the JSON should be: \`{"responseText": "...", "action": "ANSWER"}\`
+    - If you have specific details but CANNOT find the answer, the JSON must be: \`{"responseText": "...", "action": "OFFER_TICKET", "ticketData": {"category": "...", "urgency": "...", "subject": "...", "description": "..."}}\`
     - **ticketData Rules:**
         - 'category': Infer from keywords (e.g., "software", "crashing" -> "IT Support > Software Issues").
         - 'urgency': Infer from user's language (e.g., "can't work", "month-end" -> "High"; "annoying" -> "Medium"; "question about" -> "Low").
         - 'subject': A concise summary of the user's problem.
-        - 'description': A more detailed summary of the user's query for the support team.
-    - **Example for a missing answer:** {"responseText": "I couldn't find a fix for that software issue. I can file a ticket for you with the details I've gathered.", "action": "OFFER_TICKET", "ticketData": {"category": "IT Support > Software Issues", "urgency": "High", "subject": "Accounting Software Crashing", "description": "User reported that the 'AccuBalance v4.5' software freezes and closes when running a quarterly report. They have already restarted their PC."}}
+        - 'description': A more detailed summary of the user's query and the conversation history for the support team.
 `;
 
 
@@ -69,15 +70,31 @@ const retrieveContext = (query: string) => {
   return knowledgeBase.filter(doc => doc.keywords.some(keyword => lowerQuery.includes(keyword)));
 };
 
-async function fetchAiResponse(query: string, contextDocs: any[]) {
+async function fetchAiResponse(query: string, contextDocs: any[], chatHistory: ChatMessage[]) {
   if (!apiKey) return JSON.stringify({ responseText: "Error: Gemini API key is not configured.", action: "ERROR" });
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // Changed to latest flash model
     const contextString = contextDocs.length > 0
       ? contextDocs.map(doc => `Document: ${doc.id}\nTitle: ${doc.title}\nContent: ${doc.content}`).join('\n---\n')
       : "- No relevant documents found.";
 
-    const fullPrompt = `${masterPrompt}\n---\n[CONTEXT]:\n${contextString}\n---\n[USER QUERY]:\n${query}`;
+    // Format the chat history for the AI
+    const historyString = chatHistory.map(msg => {
+      return msg.type === 'user' ? `User: ${msg.content}` : `Sparky: ${msg.content}`;
+    }).join('\n');
+
+    const fullPrompt = `
+      ${masterPrompt}
+      ---
+      [CONTEXT]:
+      ${contextString}
+      ---
+      [CHAT HISTORY]:
+      ${historyString}
+      ---
+      [USER QUERY]:
+      ${query}
+    `;
 
     const result = await model.generateContent(fullPrompt);
     const responseText = result.response.text();
@@ -151,7 +168,8 @@ export function AIChatbotScreen({ onNavigate, onBack }: AIChatbotScreenProps) {
 const handleSendMessage = async () => {
     if (inputMessage.trim() && !isLoading) {
       const currentQuery = inputMessage.toLowerCase().trim();
-      addMessage('user', inputMessage);
+      const newMessages = [...messages, { id: Date.now(), type: 'user' as const, content: inputMessage, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }];
+      setMessages(newMessages);
       setInputMessage('');
 
       // --- NEW LOGIC BLOCK TO CHECK "MEMORY" ---
@@ -166,29 +184,30 @@ const handleSendMessage = async () => {
         // If the response is not affirmative, reset the flag and proceed as a normal query
         setIsAwaitingTicketConfirmation(false);
       }
-      
       setIsLoading(true);
       setShowTicketOffer(false);
+      // Define the recent history to pass as memory
+      const recentHistory = newMessages.slice(-5, -1); // Get the last 4 messages before the user's current one
 
       const context = retrieveContext(currentQuery);
-      const aiResult = await fetchAiResponse(currentQuery, context);
+      const aiResult = await fetchAiResponse(currentQuery, context, recentHistory); // <-- Pass history here
 
-      addMessage('ai', aiResult.responseText, aiResult.action === 'OFFER_TICKET');
+ addMessage('ai', aiResult.responseText, aiResult.action === 'OFFER_TICKET');
       if (aiResult.action === 'OFFER_TICKET' && aiResult.ticketData) {
         setTicketData(aiResult.ticketData);
         setShowTicketOffer(true);
-        setIsAwaitingTicketConfirmation(true); // Set the "memory" flag to true
+        setIsAwaitingTicketConfirmation(true);
       }
       setIsLoading(false);
     }
   };
-  
+
   const handleFileTicketRequest = () => {
     setShowTicketOffer(false);
     setIsAwaitingTicketConfirmation(false); // Reset the "memory" flag here too
     setIsFilingTicket(true);
   };
-  
+
     const handleTicketFieldChange = (field: keyof TicketData, value: string) => {
     setTicketData(prev => prev ? { ...prev, [field]: value } : null);
   };
@@ -243,7 +262,7 @@ const handleSendMessage = async () => {
                           <p className="text-sm" style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p>
                           <p className={`text-xs mt-1 ${message.type === 'user' ? 'text-white/70' : 'text-gray-500'}`}>{message.timestamp}</p>
                           {message.offerTicket && showTicketOffer && (
-                            <div className="mt-3 flex gap-2">
+                            <div className="mt-3 flex flex-wrap gap-2"> {/* <--- FIXED LINE */}
                                 <Button size="sm" className="bg-white text-blue-600 border-blue-200" variant="outline" onClick={handleFileTicketRequest}>Yes, file a ticket</Button>
                                 <Button size="sm" className="bg-white text-gray-600 border-gray-200" variant="outline" onClick={() => setShowTicketOffer(false)}>No, thanks</Button>
                             </div>
