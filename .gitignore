@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# DANGEROUS to commit - contains secrets!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# or a more general rule
+/.env*
