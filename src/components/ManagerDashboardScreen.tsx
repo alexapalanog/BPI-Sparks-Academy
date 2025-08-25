@@ -190,18 +190,18 @@ const teamAnalytics = {
   }
 };
 
-// AI Coach frequent questions - Extended list for scrolling
+// AI Support Bot frequent concerns - Extended list for scrolling
 const frequentAIQuestions = [
-  { question: 'How to improve communication skills?', frequency: 23, category: 'Soft Skills' },
-  { question: 'Best practices for JavaScript?', frequency: 18, category: 'Technical' },
-  { question: 'Leadership development tips?', frequency: 15, category: 'Leadership' },
-  { question: 'Career advancement advice?', frequency: 12, category: 'Career' },
-  { question: 'Time management strategies?', frequency: 10, category: 'Productivity' },
-  { question: 'How to handle difficult conversations?', frequency: 9, category: 'Communication' },
-  { question: 'Database optimization techniques?', frequency: 8, category: 'Technical' },
-  { question: 'Team motivation strategies?', frequency: 7, category: 'Leadership' },
-  { question: 'Work-life balance tips?', frequency: 6, category: 'Wellness' },
-  { question: 'Presentation skills improvement?', frequency: 5, category: 'Communication' }
+  { question: 'How to reset my system password?', frequency: 42, category: 'IT Support' },
+  { question: 'What is the process for vacation leave?', frequency: 35, category: 'HR Policy' },
+  { question: 'My monitor is not working, what to do?', frequency: 28, category: 'Hardware' },
+  { question: 'How do I file an expense claim?', frequency: 25, category: 'Finance' },
+  { question: 'Cannot connect to the corporate VPN', frequency: 21, category: 'IT Support' },
+  { question: 'Where can I find my payslip?', frequency: 19, category: 'HR Payroll' },
+  { question: 'How to report a suspicious email?', frequency: 15, category: 'Security' },
+  { question: 'Procedure for core system downtime?', frequency: 12, category: 'Operations' },
+  { question: 'How to request a new laptop?', frequency: 9, category: 'Hardware' },
+  { question: 'What are the AML red flags?', frequency: 7, category: 'Compliance' }
 ];
 
 // Team skill matrix data for heatmap with labels - Complete skill names
@@ -795,13 +795,13 @@ export function ManagerDashboardScreen({ onNavigate }: ManagerDashboardScreenPro
           </CardContent>
         </Card>
 
-        {/* AI Coach Analytics - Scrollable with max 4 items */}
+        {/* AI Support Bot Analytics - Scrollable with max 4 items */}
         <Card className="border-0 shadow-md">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
-                <Brain className="w-5 h-5 text-[#f6b60b]" />
-                Most Frequent AI Coach Concerns
+                <HelpCircle className="w-5 h-5 text-[#f6b60b]" />
+                Most Frequent AI Support Concerns
               </CardTitle>
               <div className="flex items-center gap-1">
                 <Button
@@ -827,10 +827,10 @@ export function ManagerDashboardScreen({ onNavigate }: ManagerDashboardScreenPro
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {visibleQuestions.map((item, index) => (
+              {visibleQuestions.map((item) => (
                 <div key={item.question} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-[#f6b60b]/10 rounded-lg flex items-center justify-center">
-                    <HelpCircle className="w-4 h-4 text-[#f6b60b]" />
+                  <div className="w-8 h-8 bg-[#f6b60b]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <MessageCircle className="w-4 h-4 text-[#f6b60b]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{item.question}</p>
@@ -845,7 +845,6 @@ export function ManagerDashboardScreen({ onNavigate }: ManagerDashboardScreenPro
               ))}
             </div>
             
-            {/* Scroll indicator */}
             {frequentAIQuestions.length > maxVisibleQuestions && (
               <div className="text-center mt-3">
                 <span className="text-xs text-gray-500">
